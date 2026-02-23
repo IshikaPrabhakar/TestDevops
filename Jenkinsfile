@@ -5,12 +5,13 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                checkout scm
+                git url: 'https://github.com/your-username/your-repo.git', branch: 'main'
             }
         }
 
         stage('Create Virtual Environment') {
             steps {
+                sh 'rm -rf env || true'
                 sh 'python3 -m venv env'
             }
         }
@@ -23,7 +24,7 @@ pipeline {
 
         stage('Run Application') {
             steps {
-                sh '. env/bin/activate && python3 main.py'
+                sh '. env/bin/activate && nohup python3 main.py &'
             }
         }
     }
