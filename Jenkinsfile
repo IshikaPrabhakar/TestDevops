@@ -18,7 +18,7 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh '. env/bin/activate && pip install -r requirements.txt'
+                sh '. env/bin/activate && pip install -r requirement.txt'
             }
         }
 
