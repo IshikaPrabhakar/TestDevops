@@ -24,7 +24,7 @@ pipeline {
 
         stage('Run Application') {
             steps {
-                sh '. env/bin/activate && nohup python3 main.py &'
+                sh '. env/bin/activate && nohup uvicorn main:app --host 0.0.0.0 --port 8000 > app.log 2>&1 &'            
             }
         }
     }
