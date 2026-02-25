@@ -24,7 +24,7 @@ pipeline {
 
         stage('Run Application') {
             steps {
-                sh '. env/bin/activate && nohup uvicorn main:app --host 0.0.0.0 --port 8000 > app.log 2>&1 &'            
+                sh '. env/bin/activate && nohup uvicorn main:app --host 172.31.32.123 --port 8000 > app.log 2>&1 &'            
             }
         }
     }
