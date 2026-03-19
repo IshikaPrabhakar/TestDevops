@@ -3,10 +3,8 @@ pipeline {
 
   environment {
     SONAR_URL = 'http://ec2-13-202-47-19.ap-south-1.compute.amazonaws.com:15998/'
-    SONAR_AUTH_TOKEN = credentials('sqp_e69615d3230e800f6df06aa01770fbdaeeec96c0')
     SONAR_PROJECT = 'Devops_Project'
     PROJECT_LANG = 'python'
-    SNYK_TOKEN = credentials('snyk_uat.1fcad39e.eyJlIjoxNzc5ODc0MDcyLCJoIjoic255ay5pbyIsImoiOiJBWnlaUnh2RjRUVHJPWk1kdmxKbEFnIiwicyI6InUwLUpzM1RqUVlhbURGTEZLMEZjOHciLCJ0aWQiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIn0.t29CRCUcAUW67In52wi-3e-Qlp1zIenc-HRxc2pIXmlXHQ4teBJDzQEDGqOB9QC9-UTqX05gARIdjZkaDBPvBw')
   }
 
   stages {
@@ -27,9 +25,7 @@ pipeline {
           -Dsonar.projectKey=Devops_Project \
 	      -Dsonar.projectName=Devops_Project \
           -Dsonar.sources=. \
-          -Dsonar.host.url=${SONAR_URL} \
-          -Dsonar.login=${SONAR_AUTH_TOKEN} \
-          -Dsonar.language=${PROJECT_LANG}
+          -Dsonar.host.url=${SONAR_URL}
           """
         }
       }
@@ -44,8 +40,7 @@ pipeline {
             pip install -r requirements.txt || true
 
             npm install -g snyk
-            snyk auth $SNYK_TOKEN
-"
+            npx snyk auth ${SNYK_TOKEN}
 
             snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || true
             snyk monitor --file=requirements.txt --package-manager=pip
