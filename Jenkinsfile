@@ -1,93 +1,120 @@
 pipeline {
-agent any
+  agent any
 
-```
-environment {
-    SONAR_SCANNER_HOME = tool 'SonarScanner'
-    SNYK_TOKEN = credentials('snyk-token')
-}
+  environment {
+    SONAR_URL = 'http://ec2-13-202-47-19.ap-south-1.compute.amazonaws.com:15998/'
+    SONAR_PROJECT = 'Devops_Project'
+    PROJECT_LANG = 'python'
+  }
 
-stages {
+  stages {
 
     stage('Checkout Code') {
-        steps {
-            git url: 'https://github.com/IshikaPrabhakar/TestDevops.git', branch: 'main'
-        }
+      steps {
+        git branch: 'main',
+            credentialsId: 'github-pat',
+            url: 'https://github.com/IshikaPrabhakar/TestDevops.git'
+      }
     }
 
-    stage('Create Virtual Environment') {
-        steps {
-            sh '''
-            rm -rf env || true
+    stage('SonarQube Scan') {
+      steps {
+        withSonarQubeEnv('SonarQube') {
+          sh """
+          sonar-scanner \
+          -Dsonar.projectKey=Devops_Project \
+	  -Dsonar.projectName=Devops_Project \
+          -Dsonar.sources=. \
+          -Dsonar.host.url="sqp_e69615d3230e800f6df06aa01770fbdaeeec96c0"
+          """
+        }
+      }
+    }
+
+    stage('Snyk Scan') {
+      steps {
+        withCredentials([string(credentialsId: 'snyk-token01', variable: 'SNYK_TOKEN')]) {
+          sh '''
             python3 -m venv env
-            '''
-        }
-    }
-
-    stage('Install Dependencies') {
-        steps {
-            sh '''
             . env/bin/activate
-            pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install python-owasp-zap-v2.4 setuptools
-            '''
-        }
-    }
+            pip install -r requirements.txt || true
 
-    stage('Snyk Security Scan') {
-        steps {
-            sh '''
             npm install -g snyk
-            snyk auth $SNYK_TOKEN
-            snyk test || true
-            '''
+            snyk auth "snyk_uat.1fcad39e.eyJlIjoxNzc5ODc0MDcyLCJoIjoic255ay5pbyIsImoiOiJBWnlaUnh2RjRUVHJPWk1kdmxKbEFnIiwicyI6InUwLUpzM1RqUVlhbURGTEZLMEZjOHciLCJ0aWQiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIn0.t29CRCUcAUW67In52wi-3e-Qlp1zIenc-HRxc2pIXmlXHQ4teBJDzQEDGqOB9QC9-UTqX05gARIdjZkaDBPvBw
+"
+
+            snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || true
+            snyk monitor --file=requirements.txt --package-manager=pip
+          '''
         }
+      }
     }
 
-    stage('SonarQube Analysis') {
-        steps {
-            withSonarQubeEnv('sonarqube-server') {
-                sh '''
-                $SONAR_SCANNER_HOME/bin/sonar-scanner
-                '''
-            }
-        }
+    stage('DAST (ZAP Scan)') {
+      steps {
+        sh '''
+          echo "🐍 Setting up environment"
+          python3 -m venv zap_env
+          . zap_env/bin/activate
+          pip install -r requirements.txt
+          pip install python-owasp-zap-v2.4 setuptools
+
+          echo "🚀 Starting FastAPI app"
+          nohup zapenv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > zap_app.log 2>&1 &
+          APP_PID=$!
+
+          echo "⏳ Waiting for app..."
+          sleep 15
+
+          # Get machine IP (IMPORTANT FIX)
+          HOST_IP=$(hostname -I | awk '{print $1}')
+          echo "Host IP: $HOST_IP"
+
+          echo "🐳 Running ZAP scan via Docker"
+          docker run --rm \
+            --network host \
+            -v $(pwd):/zap/wrk \
+            ghcr.io/zaproxy/zaproxy:weekly \
+            zap-baseline.py \
+            -t http://$HOST_IP:8000 \
+            -r zap_report.html
+
+          echo "🛑 Stopping app"
+          kill $APP_PID || true
+        '''
+
+        publishHTML([
+          allowMissing: false,
+          alwaysLinkToLastBuild: true,
+          keepAll: true,
+          reportDir: '.',
+          reportFiles: 'zap_report.html',
+          reportName: 'ZAP DAST Report'
+        ])
+
+        archiveArtifacts artifacts: 'zap_report.html', fingerprint: true
+      }
     }
 
-    stage('Run Application') {
-        steps {
-            sh '''
-            . env/bin/activate
-            nohup uvicorn main:app --host 0.0.0.0 --port 8000 > app.log 2>&1 &
-            sleep 15
-            '''
-        }
+    stage('Build Package') {
+      steps {
+        sh '''
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install build
+          python -m build
+        '''
+      }
     }
 
-    stage('OWASP ZAP Security Scan') {
-        steps {
-            sh '''
-            . env/bin/activate
-            python zap-baseline.py -t http://localhost:8000 -r zap_report.html
-            '''
-        }
-    }
-}
+  }
 
-post {
-    always {
-        archiveArtifacts artifacts: 'zap_report.html', allowEmptyArchive: true
-    }
-
+  post {
     success {
-        echo 'Pipeline executed successfully'
+      echo '✅ Pipeline executed successfully'
     }
-
     failure {
-        echo 'Pipeline failed'
+      echo '❌ Pipeline failed'
     }
-}
-```
-
+  }
 }
