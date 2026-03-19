@@ -12,7 +12,7 @@ pipeline {
     stage('Checkout Code') {
       steps {
         git branch: 'main',
-            credentialsId: 'github-pat',
+            credentialsId: 'Connect to Jenkins',
             url: 'https://github.com/IshikaPrabhakar/TestDevops.git'
       }
     }
