@@ -3,8 +3,10 @@ pipeline {
 
   environment {
     SONAR_URL = 'http://ec2-13-202-47-19.ap-south-1.compute.amazonaws.com:15998/'
+    SONAR_AUTH_TOKEN = credentials('sqp_e69615d3230e800f6df06aa01770fbdaeeec96c0')
     SONAR_PROJECT = 'Devops_Project'
     PROJECT_LANG = 'python'
+    SNYK_TOKEN = credentials('snyk_uat.1fcad39e.eyJlIjoxNzc5ODc0MDcyLCJoIjoic255ay5pbyIsImoiOiJBWnlaUnh2RjRUVHJPWk1kdmxKbEFnIiwicyI6InUwLUpzM1RqUVlhbURGTEZLMEZjOHciLCJ0aWQiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIn0.t29CRCUcAUW67In52wi-3e-Qlp1zIenc-HRxc2pIXmlXHQ4teBJDzQEDGqOB9QC9-UTqX05gARIdjZkaDBPvBw')
   }
 
   stages {
@@ -23,9 +25,11 @@ pipeline {
           sh """
           sonar-scanner \
           -Dsonar.projectKey=Devops_Project \
-	  -Dsonar.projectName=Devops_Project \
+	      -Dsonar.projectName=Devops_Project \
           -Dsonar.sources=. \
-          -Dsonar.host.url="sqp_e69615d3230e800f6df06aa01770fbdaeeec96c0"
+          -Dsonar.host.url=${SONAR_URL} \
+          -Dsonar.login=${SONAR_AUTH_TOKEN} \
+          -Dsonar.language=${PROJECT_LANG}
           """
         }
       }
@@ -40,7 +44,7 @@ pipeline {
             pip install -r requirements.txt || true
 
             npm install -g snyk
-            snyk auth "snyk_uat.1fcad39e.eyJlIjoxNzc5ODc0MDcyLCJoIjoic255ay5pbyIsImoiOiJBWnlaUnh2RjRUVHJPWk1kdmxKbEFnIiwicyI6InUwLUpzM1RqUVlhbURGTEZLMEZjOHciLCJ0aWQiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIn0.t29CRCUcAUW67In52wi-3e-Qlp1zIenc-HRxc2pIXmlXHQ4teBJDzQEDGqOB9QC9-UTqX05gARIdjZkaDBPvBw
+            snyk auth $SNYK_TOKEN
 "
 
             snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || true
@@ -60,7 +64,7 @@ pipeline {
           pip install python-owasp-zap-v2.4 setuptools
 
           echo "🚀 Starting FastAPI app"
-          nohup zapenv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > zap_app.log 2>&1 &
+          nohup zap_env/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > zap_app.log 2>&1 &
           APP_PID=$!
 
           echo "⏳ Waiting for app..."
@@ -99,8 +103,8 @@ pipeline {
     stage('Build Package') {
       steps {
         sh '''
-          python3 -m venv venv
-          . venv/bin/activate
+          python3 -m venv env
+          . env/bin/activate
           pip install build
           python -m build
         '''
