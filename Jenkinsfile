@@ -12,7 +12,6 @@ pipeline {
     stage('Checkout Code') {
       steps {
         git branch: 'main',
-            credentialsId: 'Connect to Jenkins',
             url: 'https://github.com/IshikaPrabhakar/TestDevops.git'
       }
     }
@@ -36,10 +35,11 @@ pipeline {
         withCredentials([string(credentialsId: 'snyk-token01', variable: 'SNYK_TOKEN')]) {
           sh '''
             python3 -m venv env
-            . env/bin/activate
+            sourceenv/bin/activate
+            pip install --upgrade pip
             pip install -r requirements.txt || true
 
-            npm install -g snyk
+            npm install snyk
             npx snyk auth ${SNYK_TOKEN}
 
             snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || true
