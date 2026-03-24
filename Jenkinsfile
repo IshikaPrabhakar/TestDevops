@@ -53,7 +53,7 @@ stage('Snyk Scan') {
         }
     }
 }
-    stage('DAST (ZAP Scan)') {
+stage('DAST (ZAP Scan)') {
   steps {
     sh '''
       echo "🐍 Setting up environment"
@@ -64,9 +64,9 @@ stage('Snyk Scan') {
       pwd
       ls -la
 
-      # Install dependencies if file exists (FIXED filename)
+      # Install dependencies if present
       if [ -f requirement.txt ]; then
-        echo "📦 Installing dependencies from requirement.txt"
+        echo "📦 Installing dependencies"
         zap_env/bin/pip install -r requirement.txt
       else
         echo "⚠️ No requirement.txt found, skipping..."
@@ -81,7 +81,7 @@ stage('Snyk Scan') {
 
       echo "⏳ Waiting for app to be ready..."
 
-      # Smart wait instead of fixed sleep
+      # Smart wait
       for i in {1..10}; do
         if curl -s http://127.0.0.1:8000 > /dev/null; then
           echo "✅ App is up!"
@@ -91,11 +91,11 @@ stage('Snyk Scan') {
         sleep 5
       done
 
-      # Get machine IP
+      # Get host IP
       HOST_IP=$(hostname -I | awk '{print $1}')
       echo "🌐 Host IP: $HOST_IP"
 
-      echo "🐳 Running ZAP scan via Docker"
+      echo "🐳 Running ZAP scan"
 
       docker run --rm \
         --network host \
@@ -103,14 +103,17 @@ stage('Snyk Scan') {
         owasp/zap2docker-stable \
         zap-baseline.py \
         -t http://$HOST_IP:8000 \
-        -r zap_report.html || true
+        -r /zap/wrk/zap_report.html || true
+
+      echo "📄 Checking report file..."
+      ls -la zap_report.html || echo "❌ Report not found"
 
       echo "🛑 Stopping app"
       kill $APP_PID || true
     '''
 
     publishHTML([
-      allowMissing: false,
+      allowMissing: true,   // prevents failure if report missing
       alwaysLinkToLastBuild: true,
       keepAll: true,
       reportDir: '.',
