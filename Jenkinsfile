@@ -124,22 +124,7 @@ stage('DAST (ZAP Scan)') {
     archiveArtifacts artifacts: 'zap_report.html', fingerprint: true
   }
 }
-stage('Build Package') {
-  steps {
-    sh '''
-      echo "📦 Setting up build environment"
 
-      python3 -m venv env
-
-      # Always use venv explicitly (NO pip shortcut)
-      env/bin/pip install --upgrade pip
-      env/bin/pip install build
-
-      echo "🚀 Building package"
-      env/bin/python -m build
-    '''
-  }
-}
 stage('Build Package') {
   steps {
     sh '''
