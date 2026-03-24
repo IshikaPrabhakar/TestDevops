@@ -29,19 +29,30 @@ pipeline {
         }
       }
     }
+stage('Snyk Scan') {
+    steps {
+        withCredentials([string(credentialsId: 'Snyk_Ishika', variable: 'SNYK_TOKEN')]) {
+            sh '''
+            # Create venv if not exists
+            python3 -m venv env || true
+            . env/bin/activate
 
-    stage('Snyk Scan') {
-            steps {
-                withCredentials([string(credentialsId: 'Snyk_Ishika', variable: 'SNYK_TOKEN')]) {
-                    sh '''
-                    . env/bin/activate
-                    snyk auth $SNYK_TOKEN
-                    snyk test --all-projects
-                    snyk monitor --all-projects
-                    '''
-                }
-            }
+            # Install dependencies (optional but recommended)
+            pip install -r requirements.txt || true
+
+            # Install snyk CLI
+            npm install -g snyk
+
+            # Authenticate using token (no browser)
+            snyk auth $SNYK_TOKEN
+
+            # Run scans
+            snyk test --all-projects || true
+            snyk monitor --all-projects || true
+            '''
         }
+    }
+}
 
     stage('DAST (ZAP Scan)') {
       steps {
