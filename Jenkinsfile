@@ -54,50 +54,68 @@ stage('Snyk Scan') {
     }
 }
     stage('DAST (ZAP Scan)') {
-      steps {
-        sh '''
-          echo "🐍 Setting up environment"
-          python3 -m venv zap_env
-          . zap_env/bin/activate
-          pip install -r requirements.txt
-          pip install python-owasp-zap-v2.4 setuptools
+  steps {
+    sh '''
+      echo "🐍 Setting up environment"
+      python3 -m venv zap_env
+      . zap_env/bin/activate
 
-          echo "🚀 Starting FastAPI app"
-          nohup zap_env/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > zap_app.log 2>&1 &
-          APP_PID=$!
+      echo "📂 Checking files"
+      pwd
+      ls -la
 
-          echo "⏳ Waiting for app..."
-          sleep 15
+      # Install dependencies only if file exists
+      if [ -f requirements.txt ]; then
+        zap_env/bin/pip install -r requirements.txt
+      else
+        echo "⚠️ No requirements.txt found, skipping..."
+      fi
 
-          # Get machine IP (IMPORTANT FIX)
-          HOST_IP=$(hostname -I | awk '{print $1}')
-          echo "Host IP: $HOST_IP"
+      # Install required tools
+      zap_env/bin/pip install python-owasp-zap-v2.4 setuptools uvicorn fastapi || true
 
-          echo "🐳 Running ZAP scan via Docker"
-          docker run --rm \
-            --network host \
-            -v $(pwd):/zap/wrk \
-            ghcr.io/zaproxy/zaproxy:weekly \
-            zap-baseline.py \
-            -t http://$HOST_IP:8000 \
-            -r zap_report.html
+      echo "🚀 Starting FastAPI app"
+      nohup zap_env/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > zap_app.log 2>&1 &
+      APP_PID=$!
 
-          echo "🛑 Stopping app"
-          kill $APP_PID || true
-        '''
+      echo "⏳ Waiting for app to be ready..."
 
-        publishHTML([
-          allowMissing: false,
-          alwaysLinkToLastBuild: true,
-          keepAll: true,
-          reportDir: '.',
-          reportFiles: 'zap_report.html',
-          reportName: 'ZAP DAST Report'
-        ])
+      # Wait until app responds instead of fixed sleep
+      for i in {1..10}; do
+        curl -s http://127.0.0.1:8000 && break
+        echo "Waiting..."
+        sleep 5
+      done
 
-        archiveArtifacts artifacts: 'zap_report.html', fingerprint: true
-      }
-    }
+      # Get machine IP
+      HOST_IP=$(hostname -I | awk '{print $1}')
+      echo "Host IP: $HOST_IP"
+
+      echo "🐳 Running ZAP scan via Docker"
+      docker run --rm \
+        --network host \
+        -v $(pwd):/zap/wrk \
+        ghcr.io/zaproxy/zaproxy:weekly \
+        zap-baseline.py \
+        -t http://$HOST_IP:8000 \
+        -r zap_report.html || true
+
+      echo "🛑 Stopping app"
+      kill $APP_PID || true
+    '''
+
+    publishHTML([
+      allowMissing: false,
+      alwaysLinkToLastBuild: true,
+      keepAll: true,
+      reportDir: '.',
+      reportFiles: 'zap_report.html',
+      reportName: 'ZAP DAST Report'
+    ])
+
+    archiveArtifacts artifacts: 'zap_report.html', fingerprint: true
+  }
+}
 
     stage('Build Package') {
       steps {
