@@ -32,7 +32,7 @@ pipeline {
 
     stage('Snyk Scan') {
       steps {
-        withCredentials([string(credentialsId: 'snyk-token01', variable: 'SNYK_TOKEN')]) {
+        withCredentials([string(credentialsId: 'Snyk_Ishika', variable: 'SNYK_TOKEN')]) {
           sh '''
             python3 -m venv env
             source env/bin/activate
