@@ -1,0 +1,6 @@
+projectKey=Devops_Project
+serverUrl=http://localhost:15998
+serverVersion=9.9.6.92038
+dashboardUrl=http://localhost:15998/dashboard?id=Devops_Project
+ceTaskId=AZzXLkTYIbIGndDb7q6s
+ceTaskUrl=http://localhost:15998/api/ce/task?id=AZzXLkTYIbIGndDb7q6s
