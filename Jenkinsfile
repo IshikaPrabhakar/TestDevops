@@ -139,7 +139,8 @@ stage('Build Package') {
       env/bin/python -m build
     '''
   }
-}stage('Build Package') {
+}
+stage('Build Package') {
   steps {
     sh '''
       echo "📦 Setting up build environment"
@@ -156,7 +157,7 @@ stage('Build Package') {
   }
 }
 
-  }
+}
 
   post {
     success {
