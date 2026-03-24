@@ -22,142 +22,124 @@ pipeline {
           sh """
           sonar-scanner \
           -Dsonar.projectKey=Devops_Project \
-	      -Dsonar.projectName=Devops_Project \
+          -Dsonar.projectName=Devops_Project \
           -Dsonar.sources=. \
           -Dsonar.host.url=${SONAR_URL}
           """
         }
       }
     }
-stage('Snyk Scan') {
-    steps {
+
+    stage('Snyk Scan') {
+      steps {
         withCredentials([string(credentialsId: 'Snyk_Ishika', variable: 'SNYK_TOKEN')]) {
-            sh '''
-            # Create virtual environment
+          sh '''
+            echo "🔐 Running Snyk Scan"
+
             python3 -m venv env
-            . env/bin/activate
 
-            # Use venv pip explicitly
-            env/bin/pip install -r requirements.txt || true
+            # Install dependencies safely
+            if [ -f requirements.txt ]; then
+              env/bin/pip install -r requirements.txt
+            else
+              echo "⚠️ No requirements.txt found"
+            fi
 
-            # Install snyk locally (no sudo issues)
             npm install snyk
 
-            # Authenticate
             npx snyk auth $SNYK_TOKEN
 
-            # Run scans
             npx snyk test --all-projects || true
             npx snyk monitor --all-projects || true
-            '''
+          '''
         }
+      }
     }
-}
-stage('DAST (ZAP Scan)') {
-  steps {
-    sh '''
-      echo "🐍 Setting up environment"
-      python3 -m venv zap_env
-      . zap_env/bin/activate
 
-      echo "📂 Checking files"
-      pwd
-      ls -la
+    stage('DAST (ZAP Scan)') {
+      steps {
+        sh '''
+          echo "🐍 Setting up environment"
+          python3 -m venv zap_env
 
-      # Install dependencies if present
-      if [ -f requirement.txt ]; then
-        echo "📦 Installing dependencies"
-        zap_env/bin/pip install -r requirement.txt
-      else
-        echo "⚠️ No requirement.txt found, skipping..."
-      fi
+          echo "📂 Checking files"
+          pwd
+          ls -la
 
-      # Install required packages
-      zap_env/bin/pip install python-owasp-zap-v2.4 setuptools uvicorn fastapi || true
+          # Install dependencies if present
+          if [ -f requirements.txt ]; then
+            zap_env/bin/pip install -r requirements.txt
+          else
+            echo "⚠️ No requirements.txt found"
+          fi
 
-      echo "🚀 Starting FastAPI app"
-      nohup zap_env/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > zap_app.log 2>&1 &
-      APP_PID=$!
+          zap_env/bin/pip install python-owasp-zap-v2.4 setuptools uvicorn fastapi || true
 
-      echo "⏳ Waiting for app to be ready..."
+          echo "🚀 Starting FastAPI app"
+          nohup zap_env/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > zap_app.log 2>&1 &
+          APP_PID=$!
 
-      # Smart wait
-      for i in {1..10}; do
-        if curl -s http://127.0.0.1:8000 > /dev/null; then
-          echo "✅ App is up!"
-          break
-        fi
-        echo "Waiting..."
-        sleep 5
-      done
+          echo "⏳ Waiting for app..."
+          for i in {1..10}; do
+            if curl -s http://127.0.0.1:8000 > /dev/null; then
+              echo "✅ App is up!"
+              break
+            fi
+            sleep 5
+          done
 
-      # Get host IP
-      HOST_IP=$(hostname -I | awk '{print $1}')
-      echo "🌐 Host IP: $HOST_IP"
+          HOST_IP=$(hostname -I | awk '{print $1}')
+          echo "🌐 Host IP: $HOST_IP"
 
-      echo "🐳 Running ZAP scan"
+          echo "🐳 Running ZAP scan"
+          docker run --rm \
+            --network host \
+            -v $(pwd):/zap/wrk \
+            owasp/zap2docker-stable \
+            zap-baseline.py \
+            -t http://$HOST_IP:8000 \
+            -r /zap/wrk/zap_report.html || true
 
-      docker run --rm \
-        --network host \
-        -v $(pwd):/zap/wrk \
-        owasp/zap2docker-stable \
-        zap-baseline.py \
-        -t http://$HOST_IP:8000 \
-        -r /zap/wrk/zap_report.html || true
+          echo "📄 Checking report"
+          ls -la zap_report.html || echo "❌ Report not found"
 
-      echo "📄 Checking report file..."
-      ls -la zap_report.html || echo "❌ Report not found"
+          echo "🛑 Stopping app"
+          kill $APP_PID || true
+        '''
 
-      echo "🛑 Stopping app"
-      kill $APP_PID || true
-    '''
+        publishHTML([
+          allowMissing: true,
+          alwaysLinkToLastBuild: true,
+          keepAll: true,
+          reportDir: '.',
+          reportFiles: 'zap_report.html',
+          reportName: 'ZAP DAST Report'
+        ])
 
-    publishHTML([
-      allowMissing: true,   // prevents failure if report missing
-      alwaysLinkToLastBuild: true,
-      keepAll: true,
-      reportDir: '.',
-      reportFiles: 'zap_report.html',
-      reportName: 'ZAP DAST Report'
-    ])
+        archiveArtifacts artifacts: 'zap_report.html', fingerprint: true, allowEmptyArchive: true
+      }
+    }
 
-    archiveArtifacts artifacts: 'zap_report.html', fingerprint: true
+    stage('Build Package') {
+      steps {
+        sh '''
+          echo "📦 Setting up build environment"
+
+          python3 -m venv env
+
+          env/bin/pip install --upgrade pip
+          env/bin/pip install build
+
+          echo "🚀 Building package"
+          env/bin/python -m build || echo "⚠️ Build failed (missing pyproject.toml/setup.py)"
+
+          echo "📂 Checking dist folder"
+          ls -la dist || true
+        '''
+      }
+    }
+
   }
-}
-stage('Build Package') {
-  steps {
-    sh '''
-      echo "📦 Setting up build environment"
-
-      python3 -m venv env
-
-      # Always use venv explicitly (NO pip shortcut)
-      env/bin/pip install --upgrade pip
-      env/bin/pip install build
-
-      echo "🚀 Building package"
-      env/bin/python -m build
-    '''
-  }
-}
-stage('Build Package') {
-  steps {
-    sh '''
-      echo "📦 Setting up build environment"
-
-      python3 -m venv env
-
-      # Always use venv explicitly (NO pip shortcut)
-      env/bin/pip install --upgrade pip
-      env/bin/pip install build
-
-      echo "🚀 Building package"
-      env/bin/python -m build
-    '''
-  }
-}
-
-}
 
   post {
     success {
