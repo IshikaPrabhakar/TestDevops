@@ -33,27 +33,26 @@ stage('Snyk Scan') {
     steps {
         withCredentials([string(credentialsId: 'Snyk_Ishika', variable: 'SNYK_TOKEN')]) {
             sh '''
-            # Create venv if not exists
-            python3 -m venv env || true
+            # Create virtual environment
+            python3 -m venv env
             . env/bin/activate
 
-            # Install dependencies (optional but recommended)
-            pip install -r requirements.txt || true
+            # Use venv pip explicitly
+            env/bin/pip install -r requirements.txt || true
 
-            # Install snyk CLI
-            npm install -g snyk
+            # Install snyk locally (no sudo issues)
+            npm install snyk
 
-            # Authenticate using token (no browser)
-            snyk auth $SNYK_TOKEN
+            # Authenticate
+            npx snyk auth $SNYK_TOKEN
 
             # Run scans
-            snyk test --all-projects || true
-            snyk monitor --all-projects || true
+            npx snyk test --all-projects || true
+            npx snyk monitor --all-projects || true
             '''
         }
     }
 }
-
     stage('DAST (ZAP Scan)') {
       steps {
         sh '''
