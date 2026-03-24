@@ -31,23 +31,17 @@ pipeline {
     }
 
     stage('Snyk Scan') {
-      steps {
-        withCredentials([string(credentialsId: 'Snyk_Ishika', variable: 'SNYK_TOKEN')]) {
-          sh '''
-            python3 -m venv env
-            source env/bin/activate
-            pip install --upgrade pip
-            pip install -r requirements.txt || true
-
-            npm install snyk
-            npx snyk auth ${SNYK_TOKEN}
-
-            snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || true
-            snyk monitor --file=requirements.txt --package-manager=pip
-          '''
+            steps {
+                withCredentials([string(credentialsId: 'Snyk_Ishika', variable: 'SNYK_TOKEN')]) {
+                    sh '''
+                    . env/bin/activate
+                    snyk auth $SNYK_TOKEN
+                    snyk test --all-projects
+                    snyk monitor --all-projects
+                    '''
+                }
+            }
         }
-      }
-    }
 
     stage('DAST (ZAP Scan)') {
       steps {
