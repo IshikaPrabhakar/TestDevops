@@ -64,14 +64,15 @@ stage('Snyk Scan') {
       pwd
       ls -la
 
-      # Install dependencies only if file exists
-      if [ -f requirements.txt ]; then
-        zap_env/bin/pip install -r requirements.txt
+      # Install dependencies if file exists (FIXED filename)
+      if [ -f requirement.txt ]; then
+        echo "📦 Installing dependencies from requirement.txt"
+        zap_env/bin/pip install -r requirement.txt
       else
-        echo "⚠️ No requirements.txt found, skipping..."
+        echo "⚠️ No requirement.txt found, skipping..."
       fi
 
-      # Install required tools
+      # Install required packages
       zap_env/bin/pip install python-owasp-zap-v2.4 setuptools uvicorn fastapi || true
 
       echo "🚀 Starting FastAPI app"
@@ -80,22 +81,26 @@ stage('Snyk Scan') {
 
       echo "⏳ Waiting for app to be ready..."
 
-      # Wait until app responds instead of fixed sleep
+      # Smart wait instead of fixed sleep
       for i in {1..10}; do
-        curl -s http://127.0.0.1:8000 && break
+        if curl -s http://127.0.0.1:8000 > /dev/null; then
+          echo "✅ App is up!"
+          break
+        fi
         echo "Waiting..."
         sleep 5
       done
 
       # Get machine IP
       HOST_IP=$(hostname -I | awk '{print $1}')
-      echo "Host IP: $HOST_IP"
+      echo "🌐 Host IP: $HOST_IP"
 
       echo "🐳 Running ZAP scan via Docker"
+
       docker run --rm \
         --network host \
         -v $(pwd):/zap/wrk \
-        ghcr.io/zaproxy/zaproxy:weekly \
+        owasp/zap2docker-stable \
         zap-baseline.py \
         -t http://$HOST_IP:8000 \
         -r zap_report.html || true
